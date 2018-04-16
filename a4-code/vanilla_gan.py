@@ -1,3 +1,4 @@
+
 # CSC 321, Assignment 4
 #
 # This is the main training file for the vanilla GAN part of the assignment.
@@ -23,8 +24,8 @@ import scipy.misc
 # Torch imports
 import torch
 import torch.nn as nn
-import torch.optim as optim
 import torch.nn.functional as F
+import torch.optim as optim
 from torch.autograd import Variable
 
 # Local imports
@@ -109,16 +110,13 @@ def save_samples(G, fixed_noise, iteration, opts):
     path = os.path.join(opts.sample_dir, 'sample-{:06d}.png'.format(iteration))
     scipy.misc.imsave(path, grid)
     print('Saved {}'.format(path))
-
-
+    
 def sample_noise(dim):
     """
     Generate a PyTorch Variable of uniform random noise.
-
     Input:
     - batch_size: Integer giving the batch size of noise to generate.
     - dim: Integer giving the dimension of noise to generate.
-
     Output:
     - A PyTorch Variable of shape (batch_size, dim, 1, 1) containing uniform
       random noise in the range (-1, 1).
@@ -145,41 +143,48 @@ def training_loop(train_dataloader, opts):
     iteration = 1
 
     total_train_iters = opts.num_epochs * len(train_dataloader)
-
+    
     for epoch in range(opts.num_epochs):
 
         for batch in train_dataloader:
 
             real_images, labels = batch
-            real_images, labels = utils.to_var(real_images), utils.to_var(labels).float().squeeze()
+            real_images, labels = utils.to_var(real_images), utils.to_var(labels).long().squeeze()
 
             ################################################
             ###         TRAIN THE DISCRIMINATOR         ####
             ################################################
-
+            img_ones = Variable(torch.ones(labels.size(0)))
+	    batch_zeros = Variable(torch.zeros(batch_size))
+	    batch_ones = Variable(torch.ones(batch_size))
+            if torch.cuda.is_available():
+                img_ones = img_ones.cuda()
+		batch_zeros = batch_zeros.cuda()
+                batch_ones = batch_ones.cuda()
             d_optimizer.zero_grad()
+
             # FILL THIS IN
             # 1. Compute the discriminator loss on real images
-            D_real_loss = F.mse_loss(D(real_images), Variable(torch.ones(labels.size(0))))
+            D_real_loss = F.mse_loss(D(real_images), img_ones)
 
             # 2. Sample noise
             noise = sample_noise(opts.noise_size)
 
             # 3. Generate fake images from the noise
             fake_images = G(noise)
-
+            
             # 4. Compute the discriminator loss on the fake images
-            D_fake_loss = F.mse_loss(D(fake_images), Variable(torch.zeros(batch_size)))
+            D_fake_loss = F.mse_loss(D(fake_images), batch_zeros)
 
             # 5. Compute the total discriminator loss
-            D_total_loss = D_fake_loss + D_real_loss
+            D_total_loss = D_real_loss + D_fake_loss
 
             D_total_loss.backward()
             d_optimizer.step()
 
             ###########################################
             ###          TRAIN THE GENERATOR        ###
-            ###########################################
+            ########o###################################
 
             g_optimizer.zero_grad()
 
@@ -189,9 +194,9 @@ def training_loop(train_dataloader, opts):
 
             # 2. Generate fake images from the noise
             fake_images = G(noise)
-
+            
             # 3. Compute the generator loss
-            G_loss = F.mse_loss(D(fake_images), Variable(torch.ones(batch_size)))
+            G_loss = F.mse_loss(D(fake_images), batch_ones)
 
             G_loss.backward()
             g_optimizer.step()
@@ -205,7 +210,7 @@ def training_loop(train_dataloader, opts):
             # Save the generated samples
             if iteration % opts.sample_every == 0:
                 save_samples(G, fixed_noise, iteration, opts)
-
+        
             # Save the model parameters
             if iteration % opts.checkpoint_every == 0:
                 checkpoint(iteration, G, D, opts)
@@ -223,6 +228,8 @@ def main(opts):
     # Create checkpoint and sample directories
     utils.create_dir(opts.checkpoint_dir)
     utils.create_dir(opts.sample_dir)
+    
+    utils.create_dir(opts.sample_dir + '/low_loss')
 
     training_loop(train_dataloader, opts)
 
@@ -266,4 +273,4 @@ if __name__ == '__main__':
     batch_size = opts.batch_size
 
     print(opts)
-    main(opts)
+main(opts)
